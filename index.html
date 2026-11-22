@@ -18,7 +18,7 @@
   .sides{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .side{font:inherit;font-size:22px;font-weight:700;padding:26px 6px;border:0;border-radius:14px;color:#fff;background:#1d3f8f;touch-action:manipulation}
   .side.r{background:#6b3fa0}
-  input,textarea{font:inherit;width:100%;padding:8px;border:1px solid #5a6080;border-radius:8px;box-sizing:border-box}
+  input,textarea,select{font:inherit;width:100%;padding:8px;border:1px solid #5a6080;border-radius:8px;box-sizing:border-box}
   [hidden]{display:none}
 </style>
 </head>
@@ -29,6 +29,8 @@
     <p id="consentText"></p>
     <p>受測者代碼（由研究者提供；沒有代碼可以留白）：</p>
     <input id="pid" autocomplete="off">
+    <p>這是你第幾次作答？</p>
+    <select id="session"><option value="1">第 1 次</option><option value="2">第 2 次</option></select>
     <button class="btn" id="agree">我同意參加，開始作答</button>
   </section>
   <section id="brief" hidden>
@@ -54,10 +56,10 @@ const CONFIG = {
   title: "分類作業",                                   // 受測者看到的標題，不要寫出測量的構念
   consentText: "這份作業大約需要 5 分鐘。作答內容只用於研究，不會記錄你的姓名。你可以隨時停止。",
   endpoint: "https://script.google.com/macros/s/AKfycbzZ6xFNLiEvUqbk-74Fxn5wwGGAJrWs5sk033u_HgWkzsGok5kjBoUZ6VKlNMlon7tByA/exec",                                         // 貼上 Apps Script 的網址；留空白時，資料會顯示在畫面上
-  concept1: { label: "我的公司", items: ["晴海科技", "我們公司", "本公司", "自家公司"] },
-  concept2: { label: "其他公司", items: ["別家公司", "其他企業", "外面公司", "同業公司"] },
-  attr1:    { label: "愉快",     items: ["快樂", "喜歡", "美好", "舒服"] },
-  attr2:    { label: "不愉快",   items: ["痛苦", "討厭", "糟糕", "難受"] },
+  concept1: { label: "人類創作", items: ["手繪", "親筆", "手作", "真人寫作"] },
+  concept2: { label: "AI 生成",  items: ["AI 繪圖", "機器生成", "自動生成", "演算法"] },
+  attr1:    { label: "高品質",   items: ["精緻", "出色", "優秀", "細膩"] },
+  attr2:    { label: "低品質",   items: ["粗糙", "平庸", "劣質", "拙劣"] },
   trials: [20, 20, 20, 40, 20, 20, 40]                  // 七個區段各自的嘗試次數
 };
 
@@ -82,7 +84,7 @@ const BLOCKS = [
   { type: "both",    pairing: second, phase: "practice" },
   { type: "both",    pairing: second, phase: "test" }
 ];
-let pid = "", bi = 0, list = [], ti = 0, t0 = 0, live = false, firstTry = true;
+let pid = "", session = 1, bi = 0, list = [], ti = 0, t0 = 0, live = false, firstTry = true;
 const records = [];
 
 function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const x = a[i]; a[i] = a[j]; a[j] = x; } return a; }
@@ -149,8 +151,8 @@ function answer(side) {
 }
 // 把資料轉成 CSV 文字，方便在還沒接上試算表時檢查
 function toCSV() {
-  const head = "participant_id,order,block,pairing,phase,trial,category,stimulus,correct,rt_ms";
-  const rows = records.map(function (r) { return [pid, order, r.block, r.pairing, r.phase, r.trial, r.category, r.stimulus, r.correct, r.rt_ms].join(","); });
+  const head = "participant_id,session,order,block,pairing,phase,trial,category,stimulus,correct,rt_ms";
+  const rows = records.map(function (r) { return [pid, session, order, r.block, r.pairing, r.phase, r.trial, r.category, r.stimulus, r.correct, r.rt_ms].join(","); });
   return head + "\n" + rows.join("\n");
 }
 function finish() {
@@ -162,13 +164,14 @@ function finish() {
   $("doneText").textContent = "資料傳送中，請稍候。";
   // 把資料送到 Apps Script。用 text/plain 與 no-cors，瀏覽器才不會擋下這個跨網站的請求。
   fetch(CONFIG.endpoint, { method: "POST", mode: "no-cors", headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ id: pid, order: order, trials: records }) })
+    body: JSON.stringify({ id: pid, session: session, order: order, trials: records }) })
     .then(function () { $("doneText").textContent = "資料已經送出，可以關閉這個頁面。你的代碼是 " + pid + "。"; })
     .catch(function () { $("doneText").textContent = "資料沒有送出。請把下面的內容複製給研究者。"; $("csv").hidden = false; $("csv").value = toCSV(); });
 }
 $("title").textContent = CONFIG.title; $("consentText").textContent = CONFIG.consentText;
 $("agree").addEventListener("click", function () {
   pid = $("pid").value.trim() || "P" + Date.now().toString(36) + Math.floor(Math.random() * 1000);   // 沒有代碼時，自動產生一個
+  session = Number($("session").value);                                  // 第幾次作答
   brief();
 });
 $("bGo").addEventListener("click", begin);
